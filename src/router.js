@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('knex')(require('../knexfile'));
-const { caught } = require('./utils');
+const { caught, rowToJson, rowsToCsv } = require('./utils');
 
 const router = express.Router();
 
@@ -14,27 +14,7 @@ router.get(
       .max('timestamp as timestamp')
       .groupBy('sensor_id');
 
-    const data = rows.map(row => ({
-      id: row.id,
-      timestamp: row.timestamp,
-      location: {
-        latitude: row.lat,
-        longitude: row.lng,
-      },
-      sensor: {
-        id: row.sensor_id,
-      },
-      sensordatavalues: [
-        {
-          value: row.data_p1,
-          value_type: 'P1',
-        },
-        {
-          value: row.data_p2,
-          value_type: 'P2',
-        },
-      ],
-    }));
+    const data = rows.map(rowToJson);
 
     res.json(data);
   }),
@@ -141,6 +121,36 @@ router.post(
         <strong>Napaka!</strong>
       `);
     }
+  }),
+);
+
+// history endpoint that returns history data for one sensor
+router.get(
+  '/history/:sensor_id',
+  caught(async (req, res) => {
+    if (req.params && req.params.sensor_id) {
+      const id = String(req.params.sensor_id);
+      const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 20));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const format = req.query.format === 'csv' ? 'csv' : 'json';
+      const rows = await db('measurements')
+        .where('sensor_id', id)
+        .orderBy('timestamp', 'desc')
+        .select('*')
+        .limit(limit)
+        .offset(offset);
+
+      if (format === 'json') {
+        res.json(rows.map(rowToJson));
+        return;
+      }
+      if (format === 'csv') {
+        res.set('Content-Type', 'text/plain');
+        res.send(rowsToCsv(rows));
+        return;
+      }
+    }
+    res.send('Napaka!');
   }),
 );
 
