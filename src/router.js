@@ -130,15 +130,56 @@ router.get(
   caught(async (req, res) => {
     if (req.params && req.params.sensor_id) {
       const id = String(req.params.sensor_id);
-      const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 20));
       const offset = Math.max(0, Number(req.query.offset) || 0);
       const format = req.query.format === 'csv' ? 'csv' : 'json';
-      const rows = await db('measurements')
-        .where('sensor_id', id)
-        .orderBy('timestamp', 'desc')
-        .select('*')
-        .limit(limit)
-        .offset(offset);
+
+      let average = 'none';
+      let limit = Math.max(1, Math.min(200, Number(req.query.limit) || 20));
+      if (req.query.average === 'hourly') {
+        average = 'hourly';
+        limit = Math.max(1, Math.min(48, Number(req.query.limit) || 24));
+      } else if (req.query.average === 'daily') {
+        average = 'daily';
+        limit = Math.max(1, Math.min(2, Number(req.query.limit) || 1));
+      }
+
+      let rows;
+      if (average === 'hourly') {
+        rows = await db
+          .select(
+            '*',
+            db.raw("strftime('%Y-%m-%d %H:00:00', timestamp) AS timestamp"),
+            db.raw('AVG(data_p1) AS data_p1'),
+            db.raw('AVG(data_p2) AS data_p2'),
+          )
+          .from('measurements')
+          .where('sensor_id', id)
+          .groupByRaw("strftime('%Y-%m-%d %H:00:00', timestamp)")
+          .orderBy('timestamp', 'desc')
+          .limit(limit)
+          .offset(offset);
+      } else if (average === 'daily') {
+        rows = await db
+          .select(
+            '*',
+            db.raw("strftime('%Y-%m-%d 00:00:00', timestamp) AS timestamp"),
+            db.raw('AVG(data_p1) AS data_p1'),
+            db.raw('AVG(data_p2) AS data_p2'),
+          )
+          .from('measurements')
+          .where('sensor_id', id)
+          .groupByRaw("strftime('%Y-%m-%d 00:00:00', timestamp)")
+          .orderBy('timestamp', 'desc')
+          .limit(limit)
+          .offset(offset);
+      } else {
+        rows = await db('measurements')
+          .where('sensor_id', id)
+          .orderBy('timestamp', 'desc')
+          .select('*')
+          .limit(limit)
+          .offset(offset);
+      }
 
       if (format === 'json') {
         res.json(rows.map(rowToJson));
@@ -155,3 +196,19 @@ router.get(
 );
 
 module.exports = router;
+
+/*
+
+SELECT
+  *
+, strftime('%Y-%m-%d %H:00:00', timestamp) AS timestamp
+, AVG(data_p1) AS data_p1
+, AVG(data_p2) AS data_p2
+FROM measurements
+WHERE sensor_id = '433291'
+GROUP BY
+  strftime('%Y-%m-%d %H:00:00', timestamp)
+ORDER BY timestamp DESC
+LIMIT 10;
+
+*/
