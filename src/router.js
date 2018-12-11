@@ -196,19 +196,3 @@ router.get(
 );
 
 module.exports = router;
-
-/*
-
-SELECT
-  *
-, strftime('%Y-%m-%d %H:00:00', timestamp) AS timestamp
-, AVG(data_p1) AS data_p1
-, AVG(data_p2) AS data_p2
-FROM measurements
-WHERE sensor_id = '433291'
-GROUP BY
-  strftime('%Y-%m-%d %H:00:00', timestamp)
-ORDER BY timestamp DESC
-LIMIT 10;
-
-*/
