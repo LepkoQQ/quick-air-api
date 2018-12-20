@@ -21,6 +21,14 @@ const rowToJson = row => ({
       value: row.data_p2,
       value_type: 'P2',
     },
+    {
+      value: row.data_temperature,
+      value_type: 'temperature',
+    },
+    {
+      value: row.data_humidity,
+      value_type: 'humidity',
+    },
   ],
 });
 
@@ -33,6 +41,8 @@ const rowsToCsv = rows => csvStringify(
     sensor_id: row.sensor_id,
     data_p1: row.data_p1,
     data_p2: row.data_p2,
+    data_temperature: row.data_temperature,
+    data_humidity: row.data_humidity,
   })),
   { header: true },
 );
