@@ -12,6 +12,7 @@ router.get(
     const rows = await db('measurements')
       .select('*')
       .max('timestamp as timestamp')
+      .whereRaw("`timestamp` > datetime('now', '-5 minutes')")
       .groupBy('sensor_id');
 
     const data = rows.map(rowToJson);
