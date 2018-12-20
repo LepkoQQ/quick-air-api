@@ -29,9 +29,11 @@ router.post(
       const sensorId = req.body.esp8266id;
       const dataValues = req.body.sensordatavalues;
       if (sensorId && dataValues) {
-        const p1data = dataValues.find(o => o.value_type === 'SDS_P1');
-        const p2data = dataValues.find(o => o.value_type === 'SDS_P2');
-        if (p1data && p1data.value && p2data && p2data.value) {
+        const p1Data = dataValues.find(o => o.value_type === 'SDS_P1');
+        const p2Data = dataValues.find(o => o.value_type === 'SDS_P2');
+        const temperatureData = dataValues.find(o => o.value_type === 'temperature');
+        const humidityData = dataValues.find(o => o.value_type === 'humidity');
+        if (p1Data || p2Data || temperatureData || humidityData) {
           // get location
           let loc = await db('current_locations')
             .where('sensor_id', sensorId)
@@ -45,8 +47,10 @@ router.post(
           // store measurement
           await db('measurements').insert({
             sensor_id: sensorId,
-            data_p1: p1data.value,
-            data_p2: p2data.value,
+            data_p1: p1Data && p1Data.value ? p1Data.value : '',
+            data_p2: p2Data && p2Data.value ? p2Data.value : '',
+            data_temperature: temperatureData && temperatureData.value ? temperatureData.value : '',
+            data_humidity: humidityData && humidityData.value ? humidityData.value : '',
             lat: loc.lat,
             lng: loc.lng,
           });
