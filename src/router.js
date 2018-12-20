@@ -135,48 +135,36 @@ router.get(
   caught(async (req, res) => {
     if (req.params && req.params.sensor_id) {
       const id = String(req.params.sensor_id);
-      const offset = Math.max(0, Number(req.query.offset) || 0);
       const format = req.query.format === 'csv' ? 'csv' : 'json';
+      const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const average = ['daily', 'hourly', 'fivemin', 'none'].includes(req.query.average)
+        ? req.query.average
+        : 'fivemin';
 
-      let average = 'none';
-      let limit = Math.max(1, Math.min(200, Number(req.query.limit) || 20));
-      if (req.query.average === 'hourly') {
-        average = 'hourly';
-        limit = Math.max(1, Math.min(48, Number(req.query.limit) || 24));
-      } else if (req.query.average === 'daily') {
-        average = 'daily';
-        limit = Math.max(1, Math.min(2, Number(req.query.limit) || 1));
-      }
+      const selectAveraged = async secs => db
+        .select(
+          '*',
+          db.raw(
+            `datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch') AS timestamp`,
+          ),
+          db.raw('AVG(data_p1) AS data_p1'),
+          db.raw('AVG(data_p2) AS data_p2'),
+        )
+        .from('measurements')
+        .where('sensor_id', id)
+        .groupByRaw(`datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch')`)
+        .orderBy('timestamp', 'desc')
+        .limit(limit)
+        .offset(offset);
 
       let rows;
-      if (average === 'hourly') {
-        rows = await db
-          .select(
-            '*',
-            db.raw("strftime('%Y-%m-%d %H:00:00', timestamp) AS timestamp"),
-            db.raw('AVG(data_p1) AS data_p1'),
-            db.raw('AVG(data_p2) AS data_p2'),
-          )
-          .from('measurements')
-          .where('sensor_id', id)
-          .groupByRaw("strftime('%Y-%m-%d %H:00:00', timestamp)")
-          .orderBy('timestamp', 'desc')
-          .limit(limit)
-          .offset(offset);
-      } else if (average === 'daily') {
-        rows = await db
-          .select(
-            '*',
-            db.raw("strftime('%Y-%m-%d 00:00:00', timestamp) AS timestamp"),
-            db.raw('AVG(data_p1) AS data_p1'),
-            db.raw('AVG(data_p2) AS data_p2'),
-          )
-          .from('measurements')
-          .where('sensor_id', id)
-          .groupByRaw("strftime('%Y-%m-%d 00:00:00', timestamp)")
-          .orderBy('timestamp', 'desc')
-          .limit(limit)
-          .offset(offset);
+      if (average === 'daily') {
+        rows = await selectAveraged(86400);
+      } else if (average === 'hourly') {
+        rows = await selectAveraged(3600);
+      } else if (average === 'fivemin') {
+        rows = await selectAveraged(300);
       } else {
         rows = await db('measurements')
           .where('sensor_id', id)
