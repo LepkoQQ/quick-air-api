@@ -136,27 +136,34 @@ router.get(
     if (req.params && req.params.sensor_id) {
       const id = String(req.params.sensor_id);
       const format = req.query.format === 'csv' ? 'csv' : 'json';
-      const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
-      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const all = ['', 'true', '1', 'yes'].includes(req.query.all);
+      const limit = all ? null : Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+      const offset = all ? null : Math.max(0, Number(req.query.offset) || 0);
       const average = ['daily', 'hourly', 'fivemin', 'none'].includes(req.query.average)
         ? req.query.average
         : 'fivemin';
 
-      const selectAveraged = async secs => db
-        .select(
-          '*',
-          db.raw(
-            `datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch') AS timestamp`,
-          ),
-          db.raw('AVG(data_p1) AS data_p1'),
-          db.raw('AVG(data_p2) AS data_p2'),
-        )
-        .from('measurements')
-        .where('sensor_id', id)
-        .groupByRaw(`datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch')`)
-        .orderBy('timestamp', 'desc')
-        .limit(limit)
-        .offset(offset);
+      const selectAveraged = async (secs) => {
+        let query = db
+          .select(
+            '*',
+            db.raw(
+              `datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch') AS timestamp`,
+            ),
+            db.raw('AVG(data_p1) AS data_p1'),
+            db.raw('AVG(data_p2) AS data_p2'),
+          )
+          .from('measurements')
+          .where('sensor_id', id)
+          .groupByRaw(`datetime(strftime('%s', timestamp) / ${secs} * ${secs}, 'unixepoch')`)
+          .orderBy('timestamp', 'desc');
+
+        if (!all) {
+          query = query.limit(limit).offset(offset);
+        }
+
+        return query;
+      };
 
       let rows;
       if (average === 'daily') {
